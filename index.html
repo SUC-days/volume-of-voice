@@ -32,6 +32,7 @@
       max-width: 600px;
       margin: 0 auto;
       padding: 0 20px;
+      display: none;
     }
 
     label {
@@ -68,10 +69,38 @@
       cursor: pointer;
       border: none;
     }
+
+    #startButton {
+      padding: 15px 30px;
+      font-size: 5vw;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    #startButton:hover {
+      background: #45a049;
+    }
+
+    #volumeValue,
+    .slider-container {
+      display: none;
+    }
+
+    #alertBox {
+      display: none;
+      font-size: 6vw;
+      font-weight: bold;
+      color: red;
+      margin-top: 5vh;
+    }
   </style>
 </head>
 <body>
   <h1>音量メーター</h1>
+  <button id="startButton">? マイクを使ってはじめる</button>
   <div id="volumeValue">音量: 0%</div>
 
   <div class="slider-container">
@@ -79,53 +108,89 @@
     <input type="range" id="sensitivity" min="1" max="300" value="100">
   </div>
 
+  <div id="alertBox">? アラートオン！</div>
+
+  <!-- 用意したビープ音（公開フリー音源） -->
+  <audio id="alertSound" src="keikoku.mp3" preload="auto"></audio>
+
   <script>
-    async function init() {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const audioCtx = new AudioContext();
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      const dataArray = new Uint8Array(analyser.fftSize);
-      source.connect(analyser);
+    const startButton = document.getElementById('startButton');
+    const volumeText = document.getElementById('volumeValue');
+    const sliderContainer = document.querySelector('.slider-container');
+    const sensitivitySlider = document.getElementById('sensitivity');
+    const alertBox = document.getElementById('alertBox');
+    const alertSound = document.getElementById('alertSound');
 
-      const volumeText = document.getElementById('volumeValue');
-      const sensitivitySlider = document.getElementById('sensitivity');
+    let audioPlayed = false;
 
-      function getVolume() {
-        analyser.getByteTimeDomainData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          const val = dataArray[i] - 128;
-          sum += val * val;
-        }
-        return Math.sqrt(sum / dataArray.length);
-      }
+    async function startMicrophone() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        startButton.style.display = 'none';
+        volumeText.style.display = 'block';
+        sliderContainer.style.display = 'block';
 
-      function update() {
-        const rawVolume = getVolume();
-        const sensitivity = Number(sensitivitySlider.value);
-        const percent = Math.min(100, (rawVolume * sensitivity).toFixed(1));
+        const audioCtx = new AudioContext();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        const dataArray = new Uint8Array(analyser.fftSize);
+        source.connect(analyser);
 
-        volumeText.textContent = `音量: ${percent}%`;
+        let redStartTime = null;
 
-        if (percent < 30) {
-          document.body.style.backgroundColor = '#b2ffb2'; // 緑
-        } else if (percent < 60) {
-          document.body.style.backgroundColor = '#fffca8'; // 黄
-        } else {
-          document.body.style.backgroundColor = '#ff9e9e'; // 赤
+        function getVolume() {
+          analyser.getByteTimeDomainData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            const val = dataArray[i] - 128;
+            sum += val * val;
+          }
+          return Math.sqrt(sum / dataArray.length);
         }
 
-        requestAnimationFrame(update);
-      }
+        function update() {
+          const rawVolume = getVolume();
+          const sensitivity = Number(sensitivitySlider.value);
+          const percent = Math.min(100, (rawVolume * sensitivity).toFixed(1));
+          volumeText.textContent = `音量: ${percent}%`;
 
-      update();
+          let now = Date.now();
+
+          if (percent < 30) {
+            document.body.style.backgroundColor = '#b2ffb2'; // 緑
+            redStartTime = null;
+            alertBox.style.display = 'none';
+            audioPlayed = false;
+          } else if (percent < 60) {
+            document.body.style.backgroundColor = '#fffca8'; // 黄
+            redStartTime = null;
+            alertBox.style.display = 'none';
+            audioPlayed = false;
+          } else {
+            document.body.style.backgroundColor = '#ff9e9e'; // 赤
+            if (redStartTime === null) {
+              redStartTime = now;
+            } else if (now - redStartTime >= 3000) {
+              alertBox.style.display = 'block';
+              if (!audioPlayed) {
+                alertSound.currentTime = 0;
+                alertSound.play();
+                audioPlayed = true;
+              }
+            }
+          }
+
+          requestAnimationFrame(update);
+        }
+
+        update();
+      } catch (err) {
+        alert("?? マイクの使用が許可されませんでした。ブラウザの設定で許可してください。");
+        console.error(err);
+      }
     }
 
-    init().catch(err => {
-      alert("マイクの使用が許可されていません。");
-      console.error(err);
-    });
+    startButton.addEventListener('click', startMicrophone);
   </script>
 </body>
 </html>
