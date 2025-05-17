@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>声の大きさで背景色を変える</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      transition: background-color 0.2s;
+      padding: 30px;
+      margin: 0;
+      min-height: 100vh;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    h1 {
+      font-size: 6vw;
+      margin-bottom: 5vh;
+    }
+
+    #volumeValue {
+      font-size: 5vw;
+      margin-bottom: 5vh;
+    }
+
+    .slider-container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    label {
+      font-size: 4vw;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    input[type=range] {
+      width: 100%;
+      height: 30px;
+      appearance: none;
+      background: #ddd;
+      border-radius: 15px;
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      appearance: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #4caf50;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 5px rgba(0,0,0,0.2);
+    }
+
+    input[type=range]::-moz-range-thumb {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #4caf50;
+      cursor: pointer;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>音量メーター</h1>
+  <div id="volumeValue">音量: 0%</div>
+
+  <div class="slider-container">
+    <label for="sensitivity">?? 感度（低 ← 高）</label>
+    <input type="range" id="sensitivity" min="1" max="300" value="100">
+  </div>
+
+  <script>
+    async function init() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      const dataArray = new Uint8Array(analyser.fftSize);
+      source.connect(analyser);
+
+      const volumeText = document.getElementById('volumeValue');
+      const sensitivitySlider = document.getElementById('sensitivity');
+
+      function getVolume() {
+        analyser.getByteTimeDomainData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const val = dataArray[i] - 128;
+          sum += val * val;
+        }
+        return Math.sqrt(sum / dataArray.length);
+      }
+
+      function update() {
+        const rawVolume = getVolume();
+        const sensitivity = Number(sensitivitySlider.value);
+        const percent = Math.min(100, (rawVolume * sensitivity).toFixed(1));
+
+        volumeText.textContent = `音量: ${percent}%`;
+
+        if (percent < 30) {
+          document.body.style.backgroundColor = '#b2ffb2'; // 緑
+        } else if (percent < 60) {
+          document.body.style.backgroundColor = '#fffca8'; // 黄
+        } else {
+          document.body.style.backgroundColor = '#ff9e9e'; // 赤
+        }
+
+        requestAnimationFrame(update);
+      }
+
+      update();
+    }
+
+    init().catch(err => {
+      alert("マイクの使用が許可されていません。");
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
